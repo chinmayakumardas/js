@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Call Stack & Execution Context</title>
+<style>
+  :root { --bg:#0b1220; --panel:#111827; --border:#1f2937; --text:#e5e7eb; --muted:#9ca3af; --blue:#3b82f6; --green:#22c55e; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family: Inter, system-ui, sans-serif; background:var(--bg); color:var(--text); padding:24px 16px 40px; }
+  h1 { text-align:center; font-size:1.7rem; color:#fff; margin-bottom:4px; }
+  .sub { text-align:center; color:var(--muted); font-size:0.9rem; margin-bottom:18px; }
+  .code { max-width:900px; margin:0 auto 16px; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; font-family:ui-monospace,monospace; font-size:0.85rem; line-height:1.6; color:#a5f3fc; }
+  .layout { display:grid; grid-template-columns:1fr 1fr; gap:14px; max-width:900px; margin:0 auto; }
+  @media(max-width:700px){ .layout{ grid-template-columns:1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px; min-height:220px; }
+  .panel h2 { font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); margin-bottom:12px; }
+  .frame { background:#1e293b; border-left:4px solid var(--blue); margin-bottom:8px; padding:12px; border-radius:8px; font-family:ui-monospace,monospace; font-size:0.82rem; animation:in .25s ease; }
+  .frame.active { border-left-color:var(--green); background:#052e16; }
+  .phase { display:inline-block; font-size:0.7rem; padding:2px 7px; border-radius:4px; margin-left:6px; background:#374151; }
+  .phase.creation { background:#7c3aed; }
+  .phase.execution { background:#0891b2; }
+  .mem { font-size:0.75rem; color:var(--muted); margin-top:4px; }
+  .ctx { font-size:0.9rem; line-height:1.5; }
+  .out { background:#020617; border-radius:8px; padding:12px; font-family:ui-monospace,monospace; min-height:70px; white-space:pre-wrap; color:#86efac; margin-top:12px; }
+  .controls { text-align:center; margin-top:20px; }
+  button { background:#2563eb; color:#fff; border:none; padding:11px 20px; border-radius:9px; font-size:0.9rem; cursor:pointer; margin:0 6px; }
+  button:hover { background:#1d4ed8; }
+  button.secondary { background:#374151; }
+  @keyframes in { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+</style>
+</head>
+<body>
+  <h1>Call Stack & Execution Context</h1>
+  <p class="sub">See how Execution Contexts are created, pushed and popped</p>
+
+  <div class="code">function one() { console.log("one"); two(); }<br>
+function two() { console.log("two"); three(); }<br>
+function three() { console.log("three"); }<br>
+one();</div>
+
+  <div class="layout">
+    <div class="panel">
+      <h2>Call Stack (LIFO)</h2>
+      <div id="stack"></div>
+    </div>
+    <div class="panel">
+      <h2>Current Context</h2>
+      <div class="ctx" id="ctx">Click Run to start</div>
+      <div class="out" id="out"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button onclick="run()">Run Visualization</button>
+    <button class="secondary" onclick="reset()">Reset</button>
+  </div>
+
+<script>
+  const stackEl = document.getElementById('stack');
+  const ctxEl = document.getElementById('ctx');
+  const outEl = document.getElementById('out');
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  let busy = false;
+
+  function addFrame(name, phase) {
+    const d = document.createElement('div');
+    d.className = 'frame active';
+    d.id = 'f-' + name;
+    d.innerHTML = `${name} <span class="phase ${phase}">${phase}</span><div class="mem">Memory allocated · Scope linked</div>`;
+    stackEl.prepend(d);
+  }
+  function setPhase(name, phase) {
+    const el = document.getElementById('f-' + name);
+    if (!el) return;
+    const p = el.querySelector('.phase');
+    p.textContent = phase;
+    p.className = 'phase ' + phase;
+  }
+  function removeFrame(name) {
+    const el = document.getElementById('f-' + name);
+    if (el) { el.classList.remove('active'); setTimeout(() => el.remove(), 280); }
+  }
+  function log(m) { outEl.textContent += m + '\n'; }
+  function setCtx(t) { ctxEl.innerHTML = t; }
+
+  function reset() {
+    if (busy) return;
+    stackEl.innerHTML = '';
+    ctxEl.textContent = 'Click Run to start';
+    outEl.textContent = '';
+  }
+
+  async function run() {
+    if (busy) return;
+    busy = true;
+    reset();
+    await sleep(200);
+
+    addFrame('Global EC', 'creation');
+    setCtx('<strong>Global Execution Context</strong><br>Creation phase — hoisting');
+    await sleep(700);
+    setPhase('Global EC', 'execution');
+    setCtx('<strong>Global Execution Context</strong><br>Execution phase — running code');
+    await sleep(500);
+
+    addFrame('one()', 'creation');
+    setCtx('<strong>one()</strong> — Creation then Execution');
+    await sleep(600);
+    setPhase('one()', 'execution');
+    log('one');
+    await sleep(500);
+
+    addFrame('two()', 'creation');
+    setCtx('<strong>two()</strong> — pushed on stack');
+    await sleep(600);
+    setPhase('two()', 'execution');
+    log('two');
+    await sleep(500);
+
+    addFrame('three()', 'creation');
+    setCtx('<strong>three()</strong> — top of stack');
+    await sleep(600);
+    setPhase('three()', 'execution');
+    log('three');
+    await sleep(600);
+
+    removeFrame('three()'); setCtx('three() finished → popped'); await sleep(500);
+    removeFrame('two()');   setCtx('two() finished → popped');   await sleep(500);
+    removeFrame('one()');   setCtx('one() finished → popped');   await sleep(500);
+    setCtx('<strong>Global EC</strong> — program finished');
+    await sleep(400);
+    removeFrame('Global EC');
+    busy = false;
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Event Loop Visualizer</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --panel: #111827;
+    --border: #1f2937;
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+    --stack: #3b82f6;
+    --micro: #8b5cf6;
+    --macro: #f59e0b;
+    --accent: #06b6d4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Inter, system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px 16px 40px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+  .sub {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+  }
+  .legend {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+    font-size: 0.85rem;
+  }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; }
+  .code-box {
+    max-width: 960px;
+    margin: 0 auto 18px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    color: #a5f3fc;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    min-height: 200px;
+  }
+  .panel h2 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .item {
+    background: #1e293b;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    animation: in 0.25s ease;
+  }
+  .item.stack { border-left: 4px solid var(--stack); }
+  .item.micro { border-left: 4px solid var(--micro); }
+  .item.macro { border-left: 4px solid var(--macro); }
+  @keyframes in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .output-wrap {
+    max-width: 960px;
+    margin: 16px auto 0;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+  }
+  .output-wrap h2 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .output {
+    background: #020617;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-family: ui-monospace, monospace;
+    font-size: 0.9rem;
+    min-height: 90px;
+    white-space: pre-wrap;
+    color: #86efac;
+  }
+  .controls {
+    max-width: 960px;
+    margin: 22px auto 0;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  button {
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    padding: 11px 18px;
+    border-radius: 9px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  button:hover { background: #1d4ed8; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.secondary { background: #374151; }
+  button.secondary:hover { background: #4b5563; }
+</style>
+</head>
+<body>
+  <h1>Event Loop Visualizer</h1>
+  <p class="sub">Watch Call Stack, Microtasks and Macrotasks step by step</p>
+
+  <div class="legend">
+    <span><div class="dot" style="background:var(--stack)"></div> Call Stack</span>
+    <span><div class="dot" style="background:var(--micro)"></div> Microtask Queue (Promises)</span>
+    <span><div class="dot" style="background:var(--macro)"></div> Macrotask Queue (setTimeout)</span>
+  </div>
+
+  <div class="code-box" id="code">// Choose a scenario below</div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Call Stack</h2>
+      <div id="stack"></div>
+    </div>
+    <div class="panel">
+      <h2>Microtask Queue</h2>
+      <div id="micro"></div>
+    </div>
+    <div class="panel">
+      <h2>Macrotask Queue</h2>
+      <div id="macro"></div>
+    </div>
+  </div>
+
+  <div class="output-wrap">
+    <h2>Console Output</h2>
+    <div class="output" id="out"></div>
+  </div>
+
+  <div class="controls">
+    <button id="btn1" onclick="run(1)">Scenario 1 — Basic</button>
+    <button id="btn2" onclick="run(2)">Scenario 2 — Promise vs Timeout</button>
+    <button id="btn3" onclick="run(3)">Scenario 3 — async/await</button>
+    <button class="secondary" onclick="resetAll()">Reset</button>
+  </div>
+
+<script>
+  const stackEl = document.getElementById('stack');
+  const microEl = document.getElementById('micro');
+  const macroEl = document.getElementById('macro');
+  const outEl = document.getElementById('out');
+  const codeEl = document.getElementById('code');
+  let busy = false;
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  function setBusy(v) {
+    busy = v;
+    ['btn1','btn2','btn3'].forEach(id => document.getElementById(id).disabled = v);
+  }
+
+  function log(msg) { outEl.textContent += msg + '\n'; }
+
+  function add(parent, text, cls) {
+    const d = document.createElement('div');
+    d.className = 'item ' + cls;
+    d.textContent = text;
+    parent.appendChild(d);
+    return d;
+  }
+
+  function clear() {
+    stackEl.innerHTML = '';
+    microEl.innerHTML = '';
+    macroEl.innerHTML = '';
+    outEl.textContent = '';
+  }
+
+  function resetAll() {
+    if (busy) return;
+    clear();
+    codeEl.textContent = '// Choose a scenario below';
+  }
+
+  async function run(n) {
+    if (busy) return;
+    setBusy(true);
+    clear();
+
+    if (n === 1) {
+      codeEl.textContent = `console.log("Start");
+setTimeout(() => console.log("Timeout"), 0);
+console.log("End");`;
+      add(stackEl, 'main()', 'stack');
+      await sleep(350); log('Start');
+      await sleep(400);
+      const m = add(macroEl, 'setTimeout callback', 'macro');
+      await sleep(450); log('End');
+      await sleep(350);
+      stackEl.innerHTML = '';
+      await sleep(500);
+      m.remove();
+      add(stackEl, 'setTimeout callback', 'stack');
+      await sleep(350); log('Timeout');
+      await sleep(300);
+      stackEl.innerHTML = '';
+    }
+
+    if (n === 2) {
+      codeEl.textContent = `console.log("A");
+setTimeout(() => console.log("B"), 0);
+Promise.resolve().then(() => console.log("C"));
+console.log("D");`;
+      add(stackEl, 'main()', 'stack');
+      await sleep(300); log('A');
+      await sleep(350);
+      const mac = add(macroEl, 'setTimeout → B', 'macro');
+      await sleep(350);
+      const mic = add(microEl, 'Promise.then → C', 'micro');
+      await sleep(350); log('D');
+      await sleep(300);
+      stackEl.innerHTML = '';
+      await sleep(450);
+      mic.remove();
+      add(stackEl, 'Promise.then', 'stack');
+      await sleep(300); log('C');
+      await sleep(250);
+      stackEl.innerHTML = '';
+      await sleep(400);
+      mac.remove();
+      add(stackEl, 'setTimeout', 'stack');
+      await sleep(300); log('B');
+      await sleep(250);
+      stackEl.innerHTML = '';
+    }
+
+    if (n === 3) {
+      codeEl.textContent = `async function foo() {
+  console.log(1);
+  await Promise.resolve();
+  console.log(2);
+}
+console.log(3);
+foo();
+console.log(4);`;
+      add(stackEl, 'main()', 'stack');
+      await sleep(300); log('3');
+      await sleep(300);
+      add(stackEl, 'foo()', 'stack');
+      await sleep(300); log('1');
+      await sleep(300);
+      const mic = add(microEl, 'await continuation → 2', 'micro');
+      await sleep(350);
+      stackEl.querySelector('.item:last-child')?.remove();
+      await sleep(300); log('4');
+      await sleep(300);
+      stackEl.innerHTML = '';
+      await sleep(450);
+      mic.remove();
+      add(stackEl, 'foo() continuation', 'stack');
+      await sleep(300); log('2');
+      await sleep(250);
+      stackEl.innerHTML = '';
+    }
+
+    setBusy(false);
+  }
+</script>
+</body>
+</html>
