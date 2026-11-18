@@ -1,4 +1,4 @@
-# Complete JS
+# Complete JavaScript
 
 **Goal**  
 Get comfortable writing JavaScript. Stop being scared of the syntax.  
